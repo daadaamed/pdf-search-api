@@ -1,0 +1,13 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Generated ingestion output (index + metadata are build artifacts, not source)
+data/
+
+# OS / editor cruft
+.DS_Store
+.vscode/
+.idea/
