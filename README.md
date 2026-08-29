@@ -12,6 +12,8 @@ that index and returns the most relevant passages.
   Log a warning when a PDF yields 0 chars across all pages, without attempting OCR — documented as a known limitation below.
 - **Step 2**: Split each page's text into overlapping character-based chunks and print a preview of each, to confirm chunk boundaries look reasonable before generating embeddings.
 
+- **Step 3**: Load the multilingual embedding model and embed all chunks in one batch, printing the resulting shape, to confirm the model runs on CPU and produces vectors of the expected dimension before building the index.
+
  ## Review
 
  #### Scanned/image-only PDFs.
