@@ -17,10 +17,13 @@ that index and returns the most relevant passages.
 
 - **Step 4**: Normalize embeddings, build a FAISS `IndexFlatIP` index (cosine similarity via inner product), and persist the index, metadata, and an `index_info.json` (model name + dimension) to `data/`, so the API can verify it's using the same embedding model. Re-running ingestion replaces `data/` entirely.
 
+- **Step 5**: Add accepting the folder path as a CLI argument using `sys.argv`
+
  ## Review
 
  #### Scanned/image-only PDFs.
  No text layer means pdfplumber extracts 0 chars, so the file can't be searched. Detected and logged as a warning; OCR was out of scope for this exercise.
+
 
  #### Tables get flattened into meaningless text.
  Tables get flattened into meaningless text. One PDF has a table (N° Acte | Vendeur | Date | Cadastre | Surface). extract_text() reads left-to-right by position, not by column, so it mixes a cadastral reference, a name fragment, and a date into one line with no structure. Search over these chunks won't reliably match a query about a specific row. A real fix would use page.extract_tables() to parse rows properly — left out here to stay within scope.

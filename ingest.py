@@ -10,14 +10,14 @@ DATA_DIR = Path("data")
 
 
 def chunk_text(text, size=500, overlap=50):
+    """Split text into overlapping character-based chunks, dropping empty/whitespace-only ones."""
     if size <= overlap:
         raise ValueError(f"chunk size ({size}) must be greater than overlap ({overlap})")
 
     chunks = []
     start = 0
     while start < len(text):
-        end = start + size
-        chunk = text[start:end].strip()
+        chunk = text[start:start + size].strip()
         if chunk:
             chunks.append(chunk)
         start += size - overlap
@@ -35,33 +35,27 @@ def main():
         sys.exit(1)
 
     pdf_files = sorted(folder.glob("*.pdf"))
-
     if not pdf_files:
         print(f"No PDF files found in {folder}")
         sys.exit(1)
 
     print(f"Loading embedding model ({MODEL_NAME})...")
     model = SentenceTransformer(MODEL_NAME)
-    print("Model loaded.")
 
     all_chunks = []
     all_metadata = []
 
     for pdf_path in pdf_files:
-        total_chars = 0
         chunk_index = 0
+        total_chars = 0
 
         try:
             with pdfplumber.open(pdf_path) as pdf:
                 for page_num, page in enumerate(pdf.pages, start=1):
                     text = page.extract_text() or ""
                     total_chars += len(text)
-                    print(f"{pdf_path.name} - page {page_num} - {len(text)} chars")
 
                     for chunk in chunk_text(text):
-                        preview = chunk[:60].replace("\n", " ")
-                        print(f"    chunk {chunk_index}: '{preview}' ({len(chunk)} chars)")
-
                         all_chunks.append(chunk)
                         all_metadata.append({
                             "document_name": pdf_path.name,
@@ -71,45 +65,38 @@ def main():
                         })
                         chunk_index += 1
         except Exception as e:
-            print(f"ERROR: failed to process {pdf_path.name} ({e}). Skipping file.")
+            print(f"ERROR: failed to process {pdf_path.name} ({e}). Skipping.")
             continue
 
         if total_chars == 0:
-            print(f"WARNING: {pdf_path.name} yielded 0 chars across all pages "
-                  f"(likely a scanned/image-only PDF, no text layer). "
-                  f"Skipping OCR — this file will not be searchable.")
+            print(f"WARNING: {pdf_path.name} has no extractable text "
+                  f"(likely scanned/image-only). Skipping OCR.")
+        else:
+            print(f"{pdf_path.name}: {chunk_index} chunks")
 
     if not all_chunks:
-        print("\nNo chunks to embed — every PDF failed or yielded no extractable text. Exiting.")
+        print("No chunks to embed. Exiting.")
         sys.exit(1)
 
     print(f"\nEmbedding {len(all_chunks)} chunks...")
-    embeddings = model.encode(all_chunks, show_progress_bar=True)
-    embeddings = embeddings.astype("float32")
+    embeddings = model.encode(all_chunks, show_progress_bar=True).astype("float32")
     assert embeddings.shape[0] == len(all_metadata), "embeddings and metadata are out of sync!"
 
     faiss.normalize_L2(embeddings)
-
-    dimension = embeddings.shape[1]
-    index = faiss.IndexFlatIP(dimension)
+    index = faiss.IndexFlatIP(embeddings.shape[1])
     index.add(embeddings)
 
     DATA_DIR.mkdir(exist_ok=True)
     faiss.write_index(index, str(DATA_DIR / "index.faiss"))
     with open(DATA_DIR / "metadata.json", "w", encoding="utf-8") as f:
         json.dump(all_metadata, f, ensure_ascii=False, indent=2)
-
-    index_info = {
-        "model_name": MODEL_NAME,
-        "dimension": dimension,
-        "num_vectors": index.ntotal,
-    }
     with open(DATA_DIR / "index_info.json", "w", encoding="utf-8") as f:
-        json.dump(index_info, f, ensure_ascii=False, indent=2)
+        json.dump(
+            {"model_name": MODEL_NAME, "dimension": embeddings.shape[1], "num_vectors": index.ntotal},
+            f, ensure_ascii=False, indent=2,
+        )
 
-    print(f"\nIndexed {index.ntotal} vectors.")
-    print(f"Saved to {DATA_DIR / 'index.faiss'}, {DATA_DIR / 'metadata.json'}, "
-          f"and {DATA_DIR / 'index_info.json'}")
+    print(f"\nIndexed {index.ntotal} chunks from {len(pdf_files)} PDF(s). Saved to {DATA_DIR}/")
 
 
 if __name__ == "__main__":
