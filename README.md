@@ -11,8 +11,11 @@ that index and returns the most relevant passages.
   to confirm PDF text extraction works before building anything on top of it.
   Log a warning when a PDF yields 0 chars across all pages, without attempting OCR — documented as a known limitation below.
 - **Step 2**: Split each page's text into overlapping character-based chunks and print a preview of each, to confirm chunk boundaries look reasonable before generating embeddings.
+  Embeddings and metadata are kept aligned by construction, not by lookup.
 
 - **Step 3**: Load the multilingual embedding model and embed all chunks in one batch, printing the resulting shape, to confirm the model runs on CPU and produces vectors of the expected dimension before building the index.
+
+- **Step 4**: Normalize embeddings, build a FAISS `IndexFlatIP` index (cosine similarity via inner product), and persist the index, metadata, and an `index_info.json` (model name + dimension) to `data/`, so the API can verify it's using the same embedding model. Re-running ingestion replaces `data/` entirely.
 
  ## Review
 
@@ -21,3 +24,8 @@ that index and returns the most relevant passages.
 
  #### Tables get flattened into meaningless text.
  Tables get flattened into meaningless text. One PDF has a table (N° Acte | Vendeur | Date | Cadastre | Surface). extract_text() reads left-to-right by position, not by column, so it mixes a cadastral reference, a name fragment, and a date into one line with no structure. Search over these chunks won't reliably match a query about a specific row. A real fix would use page.extract_tables() to parse rows properly — left out here to stay within scope.
+
+ #### Very short chunks (e.g. a lone page number) still get indexed.
+
+ ## What I would improve with more time
+ #### Real logging instead of print

@@ -1,9 +1,12 @@
 import sys
+import json
 import pdfplumber
+import faiss
 from pathlib import Path
 from sentence_transformers import SentenceTransformer
 
 MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+DATA_DIR = Path("data")
 
 
 def chunk_text(text, size=500, overlap=50):
@@ -15,7 +18,7 @@ def chunk_text(text, size=500, overlap=50):
     while start < len(text):
         end = start + size
         chunk = text[start:end].strip()
-        if chunk:  # skip whitespace-only chunks
+        if chunk:
             chunks.append(chunk)
         start += size - overlap
     return chunks
@@ -82,9 +85,31 @@ def main():
 
     print(f"\nEmbedding {len(all_chunks)} chunks...")
     embeddings = model.encode(all_chunks, show_progress_bar=True)
-    print(f"Embeddings shape: {embeddings.shape}")
-    print(f"Metadata entries: {len(all_metadata)}")
+    embeddings = embeddings.astype("float32")
     assert embeddings.shape[0] == len(all_metadata), "embeddings and metadata are out of sync!"
+
+    faiss.normalize_L2(embeddings)
+
+    dimension = embeddings.shape[1]
+    index = faiss.IndexFlatIP(dimension)
+    index.add(embeddings)
+
+    DATA_DIR.mkdir(exist_ok=True)
+    faiss.write_index(index, str(DATA_DIR / "index.faiss"))
+    with open(DATA_DIR / "metadata.json", "w", encoding="utf-8") as f:
+        json.dump(all_metadata, f, ensure_ascii=False, indent=2)
+
+    index_info = {
+        "model_name": MODEL_NAME,
+        "dimension": dimension,
+        "num_vectors": index.ntotal,
+    }
+    with open(DATA_DIR / "index_info.json", "w", encoding="utf-8") as f:
+        json.dump(index_info, f, ensure_ascii=False, indent=2)
+
+    print(f"\nIndexed {index.ntotal} vectors.")
+    print(f"Saved to {DATA_DIR / 'index.faiss'}, {DATA_DIR / 'metadata.json'}, "
+          f"and {DATA_DIR / 'index_info.json'}")
 
 
 if __name__ == "__main__":
