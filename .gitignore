@@ -3,10 +3,13 @@ venv/
 __pycache__/
 *.pyc
 *.pyo
-
+ 
 # Generated ingestion output (index + metadata are build artifacts, not source)
 data/
-
+ 
+# Hugging Face model cache (mounted into Docker containers, not source)
+hf_cache/
+ 
 # OS / editor cruft
 .DS_Store
 .vscode/
