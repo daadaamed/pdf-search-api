@@ -176,3 +176,4 @@ Load the FAISS index, metadata, and embedding model once at startup (via FastAPI
 - **API**: add auth, rate limiting, caching, horizontal scaling...
 - **Observability**: structured logging and metrics instead of `print()` statements
 - **Model lifecycle**: a documented way to re-embed and hot-swap the index when the embedding model changes
+- **Add Test scenarios**: add unit tests, integrations test, end-to-end tests..
