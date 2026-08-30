@@ -19,6 +19,11 @@ that index and returns the most relevant passages.
 
 - **Step 5**: Add accepting the folder path as a CLI argument using `sys.argv`
 
+- **Step 6**: Minimal FastAPi app with /health reporting the number of vectors loaded.
+Load the FAISS index, metadata, and embedding model once at startup (via FastAPI's lifespan), reading the model name from index_info.json rather than a hardcoded constant so ingestion and the API can't silently drift apart. 
+
+- **Step 7**: Implement POST /search — embed the query with the same model and normalization as ingestion, search the FAISS index, and map results back to their metadata. This is the core deliverable of the API.
+
  ## Review
 
  #### Scanned/image-only PDFs.
