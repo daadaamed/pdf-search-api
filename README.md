@@ -116,7 +116,7 @@ Example response:
  
 - **Step 1**: Extract text from each PDF page and print a char count per page,
   to confirm PDF text extraction works before building anything on top of it.
-  Log a warning when a PDF yields 0 chars across all pages, without attempting OCR — documented as a known limitation below.
+  Log a warning when a PDF yields 0 chars across all pages, without attempting OCR: documented as a known limitation below.
 - **Step 2**: Split each page's text into overlapping character-based chunks and print a preview of each, to confirm chunk boundaries look reasonable before generating embeddings.
   Embeddings and metadata are kept aligned by construction, not by lookup.
 
@@ -148,10 +148,9 @@ Load the FAISS index, metadata, and embedding model once at startup (via FastAPI
 
  ### Limitation
 
-- Text extraction is layout-blind (`pdfplumber` reads by position, not
-  structure) — the root cause behind most search-quality issues below.
-- Chunking is character-based, not sentence-aware (overlap mitigates but
-  doesn't eliminate mid-sentence cuts).
+- Text extraction is layout-blind (`pdfplumber` reads by position, not structure) — the root cause behind most search-quality issues below.
+- Chunking is character-based, not sentence-aware (overlap mitigates but doesn't eliminate mid-sentence cuts).
+- No keyword search, nor re-ranking. So, if someone searches for "AFF-2026.06.11-DP-26A0019", dense search might not surface it reliably. => It's comparing meaning-fingerprints, not text.
 
  ### Assumptions
  
@@ -167,13 +166,14 @@ Load the FAISS index, metadata, and embedding model once at startup (via FastAPI
   in the source PDFs).
 - Very short chunks (e.g. a lone page number) are indexed and add minor noise.
 
-## What I'd improve for a production-grade, scalable system
+## What I'd improve for a production-grade, scalable system (depends with constraints, type of data, slo...)
 
-- **Vector store**: swap `IndexFlatIP` for an approximate index (HNSW/IVF) or a dedicated vector DB (E.g: pgvector). 
-- **Ingestion**: make it incremental (add/update/delete single documents) and run as an async background job, not a blocking CLI script.
-- **Search quality**: add hybrid search (dense + keyword/BM25) and a re-ranking pass; pure embedding similarity misses exact terms like names and reference numbers.
+- **Vector store**: swap `IndexFlatIP` for an approximate index (HNSW/IVF) if raw search latency becomes the bottleneck separately, move to a managed/self-hosted vector DB (Qdrant, pgvector) if the actual need is incremental upsert/delete or metadata filtering, which a flat FAISS file can't do.
+- **Ingestion**: make it incremental (add/update/delete single documents) and run as an async background job, not a blocking CLI script in case documents start getting added or changed regularly.
+- **Chunking**: move to document-structure chunking first, scoped specifically to the tabular PDFs where the current chunker is already known to scramble content (split by table row using `pdfplumber.extract_tables()`, headers repeated per row); apply recursive character splitting as the default for plain prose, replacing today's fixed-size window. Route each page/section to the method matching its actual content type (table vs. prose vs. form fields) rather than applying one strategy per whole document, since a single PDF often mixes several. Re-evaluate with semantic chunking only if measured retrieval quality on non-tabular content still falls short after this change.
+- **Search quality**: add hybrid search and a re-ranking pass; pure embedding similarity misses exact terms like names and reference numbers.
 - **OCR**: route scanned/image-only PDFs through Tesseract instead of skipping them.
 - **API**: add auth, rate limiting, caching, horizontal scaling...
 - **Observability**: structured logging and metrics instead of `print()` statements
 - **Model lifecycle**: a documented way to re-embed and hot-swap the index when the embedding model changes
-- **Add Test scenarios**: add unit tests, integrations test, end-to-end tests..
+- **Add Test scenarios**: add unit tests(api), integrations test, end-to-end tests..
