@@ -14,10 +14,10 @@ pip install -r requirements.txt
 python -m app.ingest <path_to_pdf_folder>
 ```
  
-Run as a module (`-m app.ingest`), not as a direct script path (`python app/ingest.py`) — the code lives inside the `app` package and uses absolute imports.
+Run as a module (`-m app.ingest`), not as a direct script path (`python app/ingest.py`); the code lives inside the `app` package and uses absolute imports.
 
 This produces three files in `data/`.
-Re-run the same command any time the PDF folder changes — ingestion alwaysrebuilds from scratch rather than appending or updating in place.
+Re-run the same command any time the PDF folder changes; ingestion always rebuilds from scratch rather than appending or updating in place.
 
 ### API server
  
@@ -144,7 +144,13 @@ Load the FAISS index, metadata, and embedding model once at startup (via FastAPI
 - Model name and dimension are persisted in index_info.json so ingestion and the API can never silently drift onto different embedding spaces.
 - API startup validates data/ fully before serving traffic: missing files, corrupt files, or an index/metadata count mismatch all raise a clear error immediately, rather than serving silently wrong results.
 - Code is organized as an app/ package (config, pdf_extraction, chunking, indexing, ingest, api); one concern per module, with indexing.py shared by both entrypoints so FAISS logic isn't duplicated.
+- FAISS was chosen over higher-level options like ChromaDB to keep the indexing/normalization logic explicit and inspectable.
 - Both docker run commands mount hf_cache/ to /root/.cache/huggingface, so the embedding model downloads once and is reused across the separate ingestion and API containers — without it, each --rm container's cache is discarded on exit and the ~470MB model re-downloads every run.
+
+#### Sentence transformers
+- Chosen: `paraphrase-multilingual-MiniLM-L12-v2`: small, fast, CPU-friendly, adequate multilingual quality for this exercise's scale.
+- If prioritizing retrieval quality over speed: `paraphrase-multilingual-mpnet-base-v2` (same family, ~2x cost, meaningfully better accuracy).
+- If the corpus were guaranteed French-only: a French-specific model (e.g. CamemBERT-based sentence embeddings) could outperform multilingual options, at the cost of losing support for other languages.
 
  ### Limitation
 
@@ -174,6 +180,6 @@ Load the FAISS index, metadata, and embedding model once at startup (via FastAPI
 - **Search quality**: add hybrid search and a re-ranking pass; pure embedding similarity misses exact terms like names and reference numbers.
 - **OCR**: route scanned/image-only PDFs through Tesseract instead of skipping them.
 - **API**: add auth, rate limiting, caching, horizontal scaling...
-- **Observability**: structured logging and metrics instead of `print()` statements
+- **Observability**: structured logging and metrics instead of `print()` statements. E.g: log query latency, log when a search returns 0 results, track index size over time.
 - **Model lifecycle**: a documented way to re-embed and hot-swap the index when the embedding model changes
 - **Add Test scenarios**: add unit tests(api), integrations test, end-to-end tests..
