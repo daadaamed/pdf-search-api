@@ -41,7 +41,7 @@ def main():
 
         for page_num, text in pages:
             total_chars += len(text)
-            for chunk in chunk_text(text):
+            for chunk in chunk_text(text, model.tokenizer):
                 all_metadata.append({
                     "document_name": pdf_path.name,
                     "page_number": page_num,

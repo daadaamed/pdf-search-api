@@ -137,9 +137,10 @@ Load the FAISS index, metadata, and embedding model once at startup (via FastAPI
 
 - **Step 10**: Refactored from two flat scripts into an `app/` package
 
+- **Step 11**: Update chunking into paragraph → sentence → word → a hard token-level cut
+
  ## Review
 
-- chunk_index resets per document, not per page.
 - One corrupt/unreadable PDF is skipped, not fatal to the whole ingestion run.
 - Model name and dimension are persisted in index_info.json so ingestion and the API can never silently drift onto different embedding spaces.
 - API startup validates data/ fully before serving traffic: missing files, corrupt files, or an index/metadata count mismatch all raise a clear error immediately, rather than serving silently wrong results.
