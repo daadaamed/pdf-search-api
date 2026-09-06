@@ -147,6 +147,7 @@ Load the FAISS index, metadata, and embedding model once at startup (via FastAPI
 - Code is organized as an app/ package (config, pdf_extraction, chunking, indexing, ingest, api); one concern per module, with indexing.py shared by both entrypoints so FAISS logic isn't duplicated.
 - FAISS was chosen over higher-level options like ChromaDB to keep the indexing/normalization logic explicit and inspectable.
 - Both docker run commands mount hf_cache/ to /root/.cache/huggingface, so the embedding model downloads once and is reused across the separate ingestion and API containers — without it, each --rm container's cache is discarded on exit and the ~470MB model re-downloads every run.
+- Chunking is token-count-based and boundary-aware, not fixed-size character windows: it recursively falls back from paragraph to sentence to word to raw token IDs, only descending a level when the current one still overflows the configured token size, so most chunks stay at the most meaningful granularity that fits.
 
 #### Sentence transformers
 - Chosen: `paraphrase-multilingual-MiniLM-L12-v2`: small, fast, CPU-friendly, adequate multilingual quality for this exercise's scale.
@@ -156,7 +157,7 @@ Load the FAISS index, metadata, and embedding model once at startup (via FastAPI
  ### Limitation
 
 - Text extraction is layout-blind (`pdfplumber` reads by position, not structure) — the root cause behind most search-quality issues below.
-- Chunking is character-based, not sentence-aware (overlap mitigates but doesn't eliminate mid-sentence cuts).
+- Chunking is now recursive and tokenizer-aware (paragraph → sentence → word → hard token cut) for plain prose. The remaining gaps — tables, columns, forms, images — are extraction-fidelity problems, not chunking problems: they lose structure before chunking ever runs, so no chunking strategy can fix them after the fact. The fix is content-type-aware routing (e.g. pdfplumber.extract_tables() for tables), which libraries like unstructured.io or Docling already do out of the box.
 - No keyword search, nor re-ranking. So, if someone searches for "AFF-2026.06.11-DP-26A0019", dense search might not surface it reliably. => It's comparing meaning-fingerprints, not text.
 
  ### Assumptions
