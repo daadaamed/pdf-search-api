@@ -2,6 +2,16 @@ import json
 
 import faiss
 
+# could be moved to utils file
+def _write_json(path, obj):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(obj, f, ensure_ascii=False, indent=2)
+
+
+def _read_json(path):
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
 
 def build_index(model, metadata):
     """Embed metadata's chunks and build a normalized FAISS IndexFlatIP.
@@ -28,13 +38,11 @@ def save_index(index, metadata, model_name, output_dir):
     """Persist the index, metadata, and model info to output_dir."""
     output_dir.mkdir(exist_ok=True)
     faiss.write_index(index, str(output_dir / "index.faiss"))
-    with open(output_dir / "metadata.json", "w", encoding="utf-8") as f:
-        json.dump(metadata, f, ensure_ascii=False, indent=2)
-    with open(output_dir / "index_info.json", "w", encoding="utf-8") as f:
-        json.dump(
-            {"model_name": model_name, "dimension": index.d, "num_vectors": index.ntotal},
-            f, ensure_ascii=False, indent=2,
-        )
+    _write_json(output_dir / "metadata.json", metadata)
+    _write_json(
+        output_dir / "index_info.json",
+        {"model_name": model_name, "dimension": index.d, "num_vectors": index.ntotal},
+    )
 
 
 def load_index(data_dir):
@@ -46,12 +54,9 @@ def load_index(data_dir):
     startup are responsible for translating these into user-facing
     messages.
     """
-    with open(data_dir / "index_info.json", encoding="utf-8") as f:
-        info = json.load(f)
-
+    info = _read_json(data_dir / "index_info.json")
     index = faiss.read_index(str(data_dir / "index.faiss"))
-    with open(data_dir / "metadata.json", encoding="utf-8") as f:
-        metadata = json.load(f)
+    metadata = _read_json(data_dir / "metadata.json")
 
     if index.ntotal != len(metadata):
         raise ValueError(

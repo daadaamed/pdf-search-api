@@ -1,20 +1,22 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from sentence_transformers import SentenceTransformer
+import logging
 
 from app.config import DATA_DIR
 from app.indexing import load_index, embed_and_search
 
-state = {}
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    app.state.ready = False
     try:
         index, metadata, model_name = load_index(DATA_DIR)
-        print(f"Loading embedding model ({model_name})...")
+        logger.info(f"Loading embedding model ({model_name})...")
         model = SentenceTransformer(model_name)
     except Exception as e:
         raise RuntimeError(
@@ -22,13 +24,14 @@ async def lifespan(app: FastAPI):
             f"Have you run ingestion yet? Try: python -m app.ingest <path_to_pdf_folder>"
         ) from e
 
-    state["index"] = index
-    state["metadata"] = metadata
-    state["model"] = model
+    app.state.index = index
+    app.state.metadata = metadata
+    app.state.model = model
+    app.state.ready = True
 
-    print(f"Ready: {index.ntotal} vectors loaded.")
+    logger.info(f"Ready: {index.ntotal} vectors loaded.")
     yield
-    state.clear()
+    app.state.ready = False
 
 
 app = FastAPI(title="PDF Search API", lifespan=lifespan)
@@ -54,13 +57,22 @@ class SearchResponse(BaseModel):
 
 @app.get("/health")
 def health():
-    return {
-        "status": "ok",
-        "vectors_loaded": state["index"].ntotal,
-    }
+    if not app.state.ready:
+        return {"status": "starting"}
+    return {"status": "ok", "vectors_loaded": app.state.index.ntotal}
 
 
 @app.post("/search", response_model=SearchResponse)
 def search(request: SearchRequest):
-    results = embed_and_search(state["model"], state["index"], state["metadata"], request.query, request.top_k)
+    if not app.state.ready:
+        raise HTTPException(status_code=503, detail="Service not ready")
+    try:
+        results = embed_and_search(
+            app.state.model, app.state.index, app.state.metadata,
+            request.query, request.top_k
+        )
+    except Exception:
+        logger.exception("Search failed")
+        raise HTTPException(status_code=500, detail="Search failed")
+
     return SearchResponse(query=request.query, results=[SearchResult(**r) for r in results])
